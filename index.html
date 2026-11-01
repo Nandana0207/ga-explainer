@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Genetic Algorithm Explainer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif; max-width: 1000px; margin: 0 auto; padding: 24px 16px 40px; color: #222;
+      background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 50%, #fff3e0 100%);
+      background-attachment: fixed; min-height: 100vh;
+    }
+    h1 { margin-bottom: 4px; color: #283593; }
+    h2 { color: #283593; }
+    .panel { background: #fff; border-radius: 12px; padding: 14px 18px; margin-top: 18px; box-shadow: 0 2px 8px rgba(40, 53, 147, 0.12); }
+    .controls { background: #fff; padding: 12px 18px 16px; border-radius: 12px; margin-top: 18px; box-shadow: 0 2px 8px rgba(40, 53, 147, 0.12); }
+    .controls label { display: block; margin: 10px 0 4px; }
+    button { padding: 8px 16px; margin: 8px 8px 0 0; font-size: 15px; cursor: pointer; border: 1px solid #7986cb; background: #e8eaf6; border-radius: 6px; }
+    button:hover { background: #c5cae9; }
+    table { border-collapse: collapse; margin-top: 8px; }
+    th, td { border: 1px solid #bbb; padding: 6px 14px; text-align: center; }
+    th { background: #e3e8f0; }
+    td.bin { font-family: monospace; letter-spacing: 2px; }
+    .note { background: #fff8e1; border-left: 4px solid #f9a825; padding: 10px 14px; margin: 12px 0; }
+    .mono { font-family: monospace; letter-spacing: 2px; }
+    .fromA { color: #1565c0; font-weight: bold; }
+    .fromB { color: #e65100; font-weight: bold; }
+    .cut { color: #888; margin: 0 2px; }
+    .flip { background: #ffcdd2; color: #b71c1c; font-weight: bold; border-radius: 3px; padding: 0 3px; }
+    canvas { max-width: 100%; border: 1px solid #ccc; border-radius: 6px; background: #fff; }
+    .howto li { margin: 8px 0; line-height: 1.45; }
+
+    /* Flow diagram: Generation k -> Elitism / Selection / Crossover / Mutation -> Generation k+1 */
+    .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; margin-top: 10px; }
+    .genbox { flex: 0 0 170px; border: 3px dashed #9fa8da; border-radius: 28px; padding: 10px; background: #f5f7ff; text-align: center; transition: all .25s; }
+    .genbox.next { background: #f1f8e9; border-color: #aed581; }
+    .genbox.active { border-style: solid; border-color: #7c4dff; box-shadow: 0 0 0 5px rgba(124, 77, 255, 0.18); }
+    .coltitle { font-weight: bold; color: #283593; margin-bottom: 6px; }
+    .coltitle small { display: block; font-weight: normal; color: #666; }
+    .arrowcol { flex: 0 0 24px; display: flex; align-items: center; justify-content: center; font-size: 28px; color: #7986cb; }
+    .mid { flex: 1 1 320px; min-width: 280px; }
+    .card { background: #fff; border: 2px solid #d0d7e2; border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; opacity: .72; transition: all .25s; }
+    .card.active { opacity: 1; border-color: #7c4dff; box-shadow: 0 0 0 4px rgba(124, 77, 255, 0.2); }
+    .card h4 { margin: 0; color: #283593; }
+    .card h4 small { color: #777; font-weight: normal; font-style: italic; }
+    .card .body { margin-top: 4px; font-size: 14px; color: #444; }
+    .row { margin: 2px 0; }
+    .chip {
+      display: inline-block; font-family: monospace; letter-spacing: 1px; color: #fff; font-size: 13px;
+      padding: 4px 9px; border-radius: 14px; margin: 3px; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+      animation: pop .35s ease; transition: transform .15s; cursor: default;
+    }
+    .chip:hover { transform: scale(1.18); }
+    .chip.mut { outline: 3px solid #d50000; outline-offset: 1px; }
+    .chip.empty { background: transparent; border: 2px dashed #b0b0b0; color: #b0b0b0; text-shadow: none; }
+    @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .legend { font-size: 13px; color: #555; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Genetic Algorithm Explainer</h1>
+  <p>Watch a population evolve, one step at a time.</p>
+
+  <div class="controls">
+    <label>Population size: <span id="popVal">6</span>
+      <input type="range" id="popSize" min="4" max="12" value="6">
+    </label>
+    <label>Mutation rate: <span id="mutVal">5</span>%
+      <input type="range" id="mutRate" min="0" max="30" value="5">
+    </label>
+    <label>
+      <input type="checkbox" id="elitism" checked> Elitism (copy the best chromosome unchanged into the next generation)
+    </label>
+    <button id="nextBtn">Next Step</button>
+    <button id="runBtn">Run</button>
+    <button id="resetBtn">Reset</button>
+  </div>
+
+  <div class="panel">
+    <h2 style="margin-top:0">From one generation to the next</h2>
+    <div id="diagram"></div>
+  </div>
+
+  <div class="panel">
+    <h2 style="margin-top:0">Fitness over generations</h2>
+    <canvas id="graph" width="740" height="280"></canvas>
+  </div>
+
+  <div class="panel">
+    <div id="tableArea"></div>
+  </div>
+
+  <div class="panel howto">
+    <h2 style="margin-top:0">How a Genetic Algorithm works</h2>
+    <ul>
+      <li><b>Population:</b> a group of candidate solutions. Here each one is a 5-bit binary chromosome,
+        for example 10110.</li>
+      <li><b>Fitness:</b> a score for how good a chromosome is. Here the fitness is x², where x is the
+        decimal value, so 11111 (31) scores 961, the best possible.</li>
+      <li><b>Elitism (survival of the fittest):</b> the best chromosome is copied unchanged into the next
+        generation, so the best score is never lost.</li>
+      <li><b>Selection:</b> fitter chromosomes are more likely to become parents (roulette wheel), just as
+        stronger individuals pass on their genes more often.</li>
+      <li><b>Crossover (mating):</b> two parents swap their tails at a random cut point, so each child mixes
+        parts of both parents.</li>
+      <li><b>Mutation (adaptation):</b> each bit flips with a small chance. This adds new variety that
+        crossover alone cannot create, and it stops the population getting stuck.</li>
+      <li><b>New generation:</b> the elite plus the mutated children replace the old population, and the cycle repeats.</li>
+      <li><b>Reading the graph:</b> the blue line is the best fitness in each generation and the orange line
+        is the average. Over time both rise toward 961 as the population converges on better solutions.</li>
+    </ul>
+  </div>
+
+  <script>
+    document.getElementById("popSize").oninput = function () {
+      document.getElementById("popVal").textContent = this.value;
+    };
+    document.getElementById("mutRate").oninput = function () {
+      document.getElementById("mutVal").textContent = this.value;
+    };
+  </script>
+
+  <script>
+    const BITS = 5;
+
+    function randomChromosome() {
+      let s = "";
+      for (let i = 0; i < BITS; i++) s += Math.random() < 0.5 ? "0" : "1";
+      return s;
+    }
+
+    function toDecimal(c) { return parseInt(c, 2); }
+
+    function fitness(c) { const x = toDecimal(c); return x * x; }
+
+    function createPopulation(n) {
+      const pop = [];
+      for (let i = 0; i < n; i++) pop.push(randomChromosome());
+      return pop;
+    }
+
+    // Roulette wheel: higher fitness = bigger slice of the wheel
+    function selectParent(pop) {
+      const total = pop.reduce((sum, c) => sum + fitness(c), 0);
+      if (total === 0) return pop[Math.floor(Math.random() * pop.length)];
+      let spin = Math.random() * total;
+      for (const c of pop) {
+        spin -= fitness(c);
+        if (spin <= 0) return c;
+      }
+      return pop[pop.length - 1];
+    }
+
+    // Single-point crossover: swap tails after a random cut point
+    function crossover(a, b) {
+      const point = 1 + Math.floor(Math.random() * (BITS - 1));
+      return {
+        point: point,
+        child1: a.slice(0, point) + b.slice(point),
+        child2: b.slice(0, point) + a.slice(point)
+      };
+    }
+
+    // Flip each bit with probability ratePercent / 100
+    function mutate(c, ratePercent) {
+      let out = "";
+      for (const bit of c) {
+        const flip = Math.random() * 100 < ratePercent;
+        out += flip ? (bit === "0" ? "1" : "0") : bit;
+      }
+      return out;
+    }
+
+    function nextGeneration(pop, ratePercent) {
+      const next = [];
+      while (next.length < pop.length) {
+        const r = crossover(selectParent(pop), selectParent(pop));
+        next.push(mutate(r.child1, ratePercent));
+        if (next.length < pop.length) next.push(mutate(r.child2, ratePercent));
+      }
+      return next;
+    }
+  </script>
+
+  <script>
+    let population = createPopulation(6);
+    let generation = 0;
+    let stage = 0;        // 0 = population, 1 = selection, 2 = crossover, 3 = mutation
+    let elite = null;     // best chromosome copied unchanged (when elitism is on)
+    let pairs = [];       // selected parent pairs: {a, b}
+    let crosses = [];     // crossover results: {a, b, r}
+    let mutations = [];   // mutation results: {before, after}
+    let mutRateUsed = 0;
+    let prevTotal = null; // total fitness of the previous generation
+    let history = [];     // one entry per generation: {best, avg}
+    let timer = null;     // Run button timer
+    const MAX_GENERATIONS = 50;
+    const MAX_VALUE = Math.pow(2, BITS) - 1;
+
+    function seg(text, cls) { return "<span class='" + cls + "'>" + text + "</span>"; }
+    function cut() { return "<span class='cut'>|</span>"; }
+
+    // Chip colour shows fitness: red = low, green = high
+    function chip(c, extra) {
+      const hue = Math.round(120 * toDecimal(c) / MAX_VALUE);
+      return "<span class='chip" + (extra ? " " + extra : "") + "' style='background:hsl(" + hue + ",65%,42%)' " +
+             "title='" + c + " = " + toDecimal(c) + ", fitness " + fitness(c) + "'>" + c + "</span>";
+    }
+    function emptyChip() { return "<span class='chip empty'>" + "·····" + "</span>"; }
+
+    function totalFitness(pop) {
+      let t = 0;
+      pop.forEach(function (c) { t += fitness(c); });
+      return t;
+    }
+
+    function recordHistory() {
+      let best = 0;
+      population.forEach(function (c) { best = Math.max(best, fitness(c)); });
+      history.push({ best: best, avg: totalFitness(population) / population.length });
+    }
+
+    function drawGraph() {
+      const cv = document.getElementById("graph");
+      const ctx = cv.getContext("2d");
+      const W = cv.width, H = cv.height, L = 50, R = 15, T = 15, B = 38;
+      ctx.clearRect(0, 0, W, H);
+
+      const maxY = MAX_VALUE * MAX_VALUE; // best possible fitness
+      const n = Math.max(history.length - 1, 10);
+      function X(i) { return L + (W - L - R) * i / n; }
+      function Y(v) { return H - B - (H - T - B) * v / maxY; }
+
+      // grid and y labels
+      ctx.strokeStyle = "#e0e0e0";
+      ctx.fillStyle = "#555";
+      ctx.font = "12px Arial";
+      ctx.textAlign = "right";
+      for (let k = 0; k <= 4; k++) {
+        const v = maxY * k / 4;
+        ctx.beginPath();
+        ctx.moveTo(L, Y(v));
+        ctx.lineTo(W - R, Y(v));
+        ctx.stroke();
+        ctx.fillText(Math.round(v), L - 6, Y(v) + 4);
+      }
+
+      // x labels
+      ctx.textAlign = "center";
+      const stepX = Math.ceil(n / 10);
+      for (let i = 0; i <= n; i += stepX) ctx.fillText(i, X(i), H - B + 16);
+      ctx.fillText("Generation", (L + W - R) / 2, H - 6);
+
+      function drawLine(key, color) {
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        history.forEach(function (h, i) {
+          if (i === 0) ctx.moveTo(X(i), Y(h[key]));
+          else ctx.lineTo(X(i), Y(h[key]));
+        });
+        ctx.stroke();
+        history.forEach(function (h, i) {
+          ctx.beginPath();
+          ctx.arc(X(i), Y(h[key]), 3, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.lineWidth = 1;
+      }
+      drawLine("avg", "#e65100");
+      drawLine("best", "#1565c0");
+
+      // legend
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#1565c0";
+      ctx.fillRect(L + 10, T + 4, 14, 4);
+      ctx.fillText("Best fitness", L + 30, T + 10);
+      ctx.fillStyle = "#e65100";
+      ctx.fillRect(L + 130, T + 4, 14, 4);
+      ctx.fillText("Average fitness", L + 150, T + 10);
+    }
+
+    function noteFor(s, total) {
+      if (s === 0) {
+        if (generation === 0) {
+          return "This is the starting population. Each chromosome is a 5-bit binary string. " +
+                 "Its decimal value x gives the fitness x². Click Next Step to select parents, " +
+                 "or Run to evolve automatically.";
+        }
+        return "This is the new generation. Total fitness went from " + prevTotal + " to " + total +
+               (total > prevTotal ? " (it improved)." : total < prevTotal ? " (it dropped this time; that can happen)." : " (no change).") +
+               " Click Next Step to evolve again.";
+      }
+      if (s === 1) {
+        return "Selection: chromosomes with higher fitness have a bigger chance of being picked as parents " +
+               "(roulette wheel). The same chromosome can be picked more than once." +
+               (elite ? " Elitism: the best chromosome " + elite + " is copied unchanged into the next generation." : "") +
+               " Click Next Step for crossover.";
+      }
+      if (s === 2) {
+        return "Crossover: each pair swaps tails at a random cut point (|). Blue bits come from Parent A, " +
+               "orange bits come from Parent B. Click Next Step for mutation.";
+      }
+      return "Mutation: each bit of each child may flip with the chance set by the slider. Flipped bits are " +
+             "highlighted in red. If nothing is highlighted, no bit flipped this time; raise the mutation rate " +
+             "and try again. Click Next Step to make these children the new generation.";
+    }
+
+    function renderDiagram() {
+      const n = population.length;
+
+      // Left: current generation
+      let left = "<div class='genbox" + (stage === 0 ? " active" : "") + "'>" +
+        "<div class='coltitle'>Generation " + generation + "<small>" + n + " individuals</small></div>";
+      population.forEach(function (c) { left += chip(c); });
+      left += "</div>";
+
+      // Right: next generation (fills up as the stages are done)
+      const items = [];
+      if (elite && stage >= 1) items.push(chip(elite));
+      if (stage >= 3) mutations.forEach(function (m) { items.push(chip(m.after, m.after !== m.before ? "mut" : "")); });
+      while (items.length < n) items.push(emptyChip());
+      let right = "<div class='genbox next" + (stage === 3 ? " active" : "") + "'>" +
+        "<div class='coltitle'>Generation " + (generation + 1) + "<small>" + n + " individuals</small></div>" +
+        items.join("") + "</div>";
+
+      // Middle: one card per operation
+      let eliteBody = elite && stage >= 1
+        ? chip(elite) + " copied unchanged"
+        : (document.getElementById("elitism").checked ? "The best chromosome is copied unchanged." : "Elitism is switched off.");
+      let selBody = "Fitter chromosomes get picked more often.";
+      if (stage >= 1) {
+        selBody = pairs.map(function (p) {
+          return "<div class='row'>" + chip(p.a) + " + " + chip(p.b) + "</div>";
+        }).join("");
+      }
+      let crossBody = "Each pair swaps tails at a random cut point.";
+      if (stage >= 2) {
+        crossBody = crosses.map(function (x) {
+          return "<div class='row'>" + chip(x.a) + " × " + chip(x.b) + " → " +
+                 chip(x.r.child1) + chip(x.r.child2) + "</div>";
+        }).join("");
+      }
+      let mutBody = "Each bit may flip with the chosen mutation rate.";
+      if (stage >= 3) {
+        let flips = 0;
+        mutations.forEach(function (m) {
+          for (let k = 0; k < m.after.length; k++) if (m.after[k] !== m.before[k]) flips++;
+        });
+        mutBody = mutations.map(function (m) {
+          return chip(m.after, m.after !== m.before ? "mut" : "");
+        }).join("") + "<div class='row'>" + flips + " bit" + (flips === 1 ? "" : "s") +
+          " flipped (red outline = mutated child)</div>";
+      }
+
+      const mid = "<div class='mid'>" +
+        "<div class='card" + (stage === 1 ? " active" : "") + "'><h4>Elitism <small>“survival of the fittest”</small></h4><div class='body'>" + eliteBody + "</div></div>" +
+        "<div class='card" + (stage === 1 ? " active" : "") + "'><h4>Selection <small>“roulette wheel”</small></h4><div class='body'>" + selBody + "</div></div>" +
+        "<div class='card" + (stage === 2 ? " active" : "") + "'><h4>Crossover <small>“mating”</small></h4><div class='body'>" + crossBody + "</div></div>" +
+        "<div class='card" + (stage === 3 ? " active" : "") + "'><h4>Mutation <small>“adaptation”</small></h4><div class='body'>" + mutBody + "</div></div>" +
+        "</div>";
+
+      const html = "<div class='flow'>" + left + "<div class='arrowcol'>➜</div>" + mid +
+        "<div class='arrowcol'>➜</div>" + right + "</div>" +
+        "<div class='legend'>Chip colour = fitness (red is low, green is high). Hover a chip to see its decimal value " +
+        "and fitness. The highlighted box shows the current stage; click Next Step to move on.</div>";
+      document.getElementById("diagram").innerHTML = html;
+    }
+
+    function renderAll() {
+      const stageNames = ["Population", "Selection", "Crossover", "Mutation"];
+      const total = totalFitness(population);
+
+      let html = "<h2 style='margin-top:0'>Generation " + generation + " &ndash; " + stageNames[stage] + "</h2>";
+      html += "<div class='note'>" + noteFor(stage, total) + "</div>";
+
+      // Population table (with selection chance from stage 1 onward)
+      html += "<table><tr><th>#</th><th>Chromosome</th><th>Decimal</th><th>Fitness (x²)</th>";
+      if (stage >= 1) html += "<th>Chance of being picked</th>";
+      html += "</tr>";
+      population.forEach(function (c, i) {
+        const f = fitness(c);
+        html += "<tr><td>" + (i + 1) + "</td><td class='bin'>" + c +
+                "</td><td>" + toDecimal(c) + "</td><td>" + f + "</td>";
+        if (stage >= 1) {
+          const chance = total === 0 ? 100 / population.length : (f / total) * 100;
+          html += "<td>" + chance.toFixed(1) + "%</td>";
+        }
+        html += "</tr>";
+      });
+      const span = stage >= 1 ? 4 : 3;
+      html += "<tr><td colspan='" + span + "'><b>Total fitness</b></td><td><b>" + total + "</b></td></tr>";
+      html += "</table>";
+
+      // Selection view
+      if (stage >= 1) {
+        html += "<h3>Selected parent pairs</h3>";
+        html += "<table><tr><th>Pair</th><th>Parent A</th><th>Parent B</th></tr>";
+        pairs.forEach(function (p, i) {
+          html += "<tr><td>" + (i + 1) + "</td>" +
+            "<td class='mono'>" + p.a + " <small>(fitness " + fitness(p.a) + ")</small></td>" +
+            "<td class='mono'>" + p.b + " <small>(fitness " + fitness(p.b) + ")</small></td></tr>";
+        });
+        html += "</table>";
+      }
+
+      // Crossover view
+      if (stage >= 2) {
+        html += "<h3>Crossover</h3>";
+        html += "<table><tr><th>Pair</th><th>Parent A</th><th>Parent B</th><th>Cut point</th>" +
+                "<th>Child 1</th><th>Child 2</th></tr>";
+        crosses.forEach(function (x, i) {
+          const p = x.r.point;
+          html += "<tr><td>" + (i + 1) + "</td>" +
+            "<td class='mono'>" + seg(x.a.slice(0, p), "fromA") + cut() + seg(x.a.slice(p), "fromA") + "</td>" +
+            "<td class='mono'>" + seg(x.b.slice(0, p), "fromB") + cut() + seg(x.b.slice(p), "fromB") + "</td>" +
+            "<td>" + p + "</td>" +
+            "<td class='mono'>" + seg(x.a.slice(0, p), "fromA") + cut() + seg(x.b.slice(p), "fromB") + "</td>" +
+            "<td class='mono'>" + seg(x.b.slice(0, p), "fromB") + cut() + seg(x.a.slice(p), "fromA") + "</td></tr>";
+        });
+        html += "</table>";
+      }
+
+      // Mutation view
+      if (stage >= 3) {
+        let flips = 0;
+        let rows = "";
+        mutations.forEach(function (m, i) {
+          let afterHtml = "";
+          for (let k = 0; k < m.after.length; k++) {
+            if (m.after[k] !== m.before[k]) {
+              afterHtml += "<span class='flip'>" + m.after[k] + "</span>";
+              flips++;
+            } else {
+              afterHtml += m.after[k];
+            }
+          }
+          rows += "<tr><td>" + (i + 1) + "</td><td class='mono'>" + m.before + "</td>" +
+                  "<td class='mono'>" + afterHtml + "</td><td>" + toDecimal(m.after) +
+                  "</td><td>" + fitness(m.after) + "</td></tr>";
+        });
+        html += "<h3>Mutation (" + mutRateUsed + "% chance per bit): " + flips +
+                " bit" + (flips === 1 ? "" : "s") + " flipped</h3>";
+        html += "<table><tr><th>Child</th><th>Before</th><th>After</th><th>Decimal</th><th>Fitness</th></tr>" +
+                rows + "</table>";
+      }
+
+      document.getElementById("tableArea").innerHTML = html;
+      renderDiagram();
+      drawGraph();
+    }
+
+    function stopRun() {
+      if (timer) { clearInterval(timer); timer = null; }
+      document.getElementById("runBtn").textContent = "Run";
+    }
+
+    function resetPopulation() {
+      stopRun();
+      const n = Number(document.getElementById("popSize").value);
+      population = createPopulation(n);
+      generation = 0;
+      stage = 0;
+      elite = null;
+      pairs = [];
+      crosses = [];
+      mutations = [];
+      prevTotal = null;
+      history = [];
+      recordHistory();
+      renderAll();
+    }
+
+    // Moves the algorithm forward by one stage (no drawing)
+    function step() {
+      if (stage === 0) {
+        elite = null;
+        if (document.getElementById("elitism").checked) {
+          elite = population.reduce(function (best, c) {
+            return fitness(c) > fitness(best) ? c : best;
+          }, population[0]);
+        }
+        const needed = population.length - (elite ? 1 : 0);
+        pairs = [];
+        const numPairs = Math.ceil(needed / 2);
+        for (let i = 0; i < numPairs; i++) {
+          pairs.push({ a: selectParent(population), b: selectParent(population) });
+        }
+        stage = 1;
+      } else if (stage === 1) {
+        crosses = pairs.map(function (p) {
+          return { a: p.a, b: p.b, r: crossover(p.a, p.b) };
+        });
+        stage = 2;
+      } else if (stage === 2) {
+        mutRateUsed = Number(document.getElementById("mutRate").value);
+        const needed = population.length - (elite ? 1 : 0);
+        const children = [];
+        crosses.forEach(function (x) {
+          children.push(x.r.child1);
+          children.push(x.r.child2);
+        });
+        mutations = children.slice(0, needed).map(function (c) {
+          return { before: c, after: mutate(c, mutRateUsed) };
+        });
+        stage = 3;
+      } else {
+        prevTotal = totalFitness(population);
+        const newPop = elite ? [elite] : [];
+        mutations.forEach(function (m) { newPop.push(m.after); });
+        population = newPop;
+        generation++;
+        stage = 0;
+        elite = null;
+        pairs = [];
+        crosses = [];
+        mutations = [];
+        recordHistory();
+      }
+    }
+
+    function nextStep() {
+      stopRun();
+      step();
+      renderAll();
+    }
+
+    // Run: evolve one full generation every half second until stopped
+    function toggleRun() {
+      if (timer) { stopRun(); return; }
+      document.getElementById("runBtn").textContent = "Stop";
+      timer = setInterval(function () {
+        do { step(); } while (stage !== 0);
+        renderAll();
+        if (generation >= MAX_GENERATIONS) stopRun();
+      }, 500);
+    }
+
+    document.getElementById("popSize").addEventListener("input", resetPopulation);
+    document.getElementById("elitism").addEventListener("change", resetPopulation);
+    document.getElementById("resetBtn").addEventListener("click", resetPopulation);
+    document.getElementById("nextBtn").addEventListener("click", nextStep);
+    document.getElementById("runBtn").addEventListener("click", toggleRun);
+
+    recordHistory();
+    renderAll();
+  </script>
+</body>
+</html>
